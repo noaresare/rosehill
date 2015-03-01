@@ -25,14 +25,15 @@ public class RosehillMain {
   public static void main(String[] args) throws Throwable {
 
     RosehillMain main = new RosehillMain("trusty0");
-    main.populate(1000 * 10);
+    main.run();
   }
 
-  private void populate(int count) throws Throwable {
+  private void run() throws Throwable {
     ArrayBackedStatsSink statsSink = new ArrayBackedStatsSink();
     SustainableRateClient rateClient = new SustainableRateClient(memcacheClient, 900, statsSink);
-    rateClient.run(count, (client, serial) -> client.set(Integer.toString(serial), "foo", 0));
-    //rateClient.run(1000, (client, serial) -> client.get(Integer.toString(serial)));
+    rateClient.run(1000 * 10, (client, serial) -> client.set(Integer.toString(serial), "foo", 0));
+    statsSink.reset();
+    rateClient.run(1000 * 100, (client, serial) -> client.get(Integer.toString(serial)));
     memcacheClient.shutdown();
     statsSink.outputStats();
   }

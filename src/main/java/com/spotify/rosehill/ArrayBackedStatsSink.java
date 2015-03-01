@@ -19,22 +19,29 @@ public class ArrayBackedStatsSink implements StatsSink {
 
 
   public ArrayBackedStatsSink() {
-    this.list = new ArrayList<>();
+    this.list = Collections.synchronizedList(new ArrayList<>());
   }
 
   @Override
   public void submitStat(int msDuration) {
-    log.debug("putting {} into list ", msDuration);
     list.add(msDuration);
     count++;
     average += (msDuration - average) / count;
+  }
+
+  public void reset() {
+    list.clear();
+    count = 0;
+    average = 0.0;
   }
 
   public void outputStats() {
     log.debug("Sorting stats...");
     Collections.sort(list);
     log.debug("done sorting list");
-    log.info("Average latency: {} ", average);
+    log.info(String.format("Average latency: %.1f ", average));
+    log.info("95th percentile latency: {}", list.get((int)(count * 0.95)));
+    log.info("99th percentile latency: {}", list.get((int)(count * 0.99)));
     log.info("Highest latency: {} ", list.get(count - 1));
   }
 }

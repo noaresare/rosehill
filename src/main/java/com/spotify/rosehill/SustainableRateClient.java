@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -37,14 +38,16 @@ public class SustainableRateClient {
     int tempOutstanding = outstanding.get();
     int target;
     int toSleep = 100;
+    CountDownLatch latch = new CountDownLatch(total - 1);
     while (true) {
       target = count + maxOutstanding - tempOutstanding;
       while (count < target) {
         if (count == total) {
-          log.debug("wrote {} records, exiting.", count);
+          log.debug("wrote {} records, exiting, latch {}", count, latch.getCount());
+          latch.await();
           return;
         }
-        doOperation(operation, count++);
+        doOperation(operation, count++, latch);
       }
       Thread.sleep(toSleep);
       tempOutstanding = outstanding.get();
@@ -60,7 +63,7 @@ public class SustainableRateClient {
 
   }
 
-  private void doOperation(Operation operation, int i) throws Throwable {
+  private void doOperation(Operation operation, int i, CountDownLatch latch) throws Throwable {
     //log.debug("calling doOperation()");
     if (throwable != null) {
       throw throwable;
@@ -77,6 +80,7 @@ public class SustainableRateClient {
             //log.info("this call took {} milliseconds", System.currentTimeMillis() - startTime);
             statsSink.submitStat((int)(System.currentTimeMillis() - startTime));
             outstanding.decrementAndGet();
+            latch.countDown();
             if (result instanceof MemcacheStatus && result != MemcacheStatus.OK) {
               throw new RuntimeException("Store failed, server returned " + result);
             }
@@ -86,8 +90,9 @@ public class SustainableRateClient {
           @Override
           @ParametersAreNonnullByDefault
           public void onFailure(Throwable t) {
-            log.info("this call took {} milliseconds", System.currentTimeMillis() - startTime);
+            statsSink.submitStat((int)(System.currentTimeMillis() - startTime));
             outstanding.decrementAndGet();
+            latch.countDown();
             throwable = t;
           }
 
